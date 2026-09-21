@@ -1,6 +1,13 @@
 from pyspark.sql import functions as F
 from src.spark_session import create_spark_session
 from src.logging_utils import setup_logger
+from src.transformation import (
+    remove_duplicates,
+    normalize_dates, 
+    standardize_customer_tier,
+    remove_null_keys,
+    flag_negative_amounts
+)
 from src.schemas import (
     orders_schema,
     order_items_schema,
@@ -21,33 +28,8 @@ def main():
     print(f"Spark Version: {spark.version}")
     print("=" * 50)
 
-    raw_orders = (
-        spark.read
-        .option("header", True)
-        .option("inferSchema", False)
-        .csv("data/raw/orders.csv")
-    )
 
-    print("\nOrder date format distribution:")
-
-    raw_orders.select(
-        F.when(
-            F.col("order_date").rlike(r"^\d{2}/\d{2}/\d{4}$"),
-            "DD/MM/YYYY"
-        )
-        .when(
-            F.col("order_date").rlike(r"^\d{4}-\d{2}-\d{2}$"),
-            "YYYY-MM-DD"
-        )
-        .when(
-            F.col("order_date").isNull() |
-            (F.trim(F.col("order_date")) == ""),
-            "NULL/EMPTY"
-        )
-        .otherwise("OTHER")
-        .alias("date_format")
-    ).groupBy("date_format").count().show()
-
+   
     orders_df, orders_rejected = load_csv(
             spark,
             "data/raw/orders.csv",
@@ -72,7 +54,40 @@ def main():
         order_items_schema
     )
 
-#Rejection Counts for the respective dataframes
+    # Remove exact duplicate rows
+    orders_df, orders_duplicates_removed = remove_duplicates(orders_df)
+    returns_df, returns_duplicates_removed = remove_duplicates(returns_df)
+    customers_df, customers_duplicates_removed = remove_duplicates(customers_df)
+    order_items_df, order_items_duplicates_removed = remove_duplicates(order_items_df)
+
+    # Normalize date columns
+    orders_df = normalize_dates(orders_df)
+    returns_df = normalize_dates(returns_df)
+    customers_df = normalize_dates(customers_df)
+    order_items_df = normalize_dates(order_items_df)
+
+    # Standardize customer_tier values to lowercase
+    customers_df = standardize_customer_tier(customers_df)
+
+    orders_df, orders_null_keys_removed = remove_null_keys(
+        orders_df,
+        ["order_id", "customer_id"]
+    )
+
+    #Flag negative order amounts without removing them
+    orders_df = flag_negative_amounts(orders_df)
+
+
+    print("\nNULL-key rows removed:")
+    print(f"Orders: {orders_null_keys_removed}")
+
+    print("\nDuplicate rows removed:")
+    print(f"Orders: {orders_duplicates_removed}")
+    print(f"Returns: {returns_duplicates_removed}")
+    print(f"Customers: {customers_duplicates_removed}")
+    print(f"Order items: {order_items_duplicates_removed}")
+
+#Rejection Counts for the respective Dataframes
     orders_rejected_count = orders_rejected.count()
     returns_rejected_count = returns_rejected.count()
     customers_rejected_count = customers_rejected.count()
@@ -106,17 +121,15 @@ def main():
         logger.warning("Rejected order item records detected.")
         order_items_rejected.show(truncate=False)
 
-    print("Data ingestion completed successfully.")
-     # Inspect the orders DataFrame
+    print("Data ingestion and cleaning completed successfully.")
+
+    # Inspect the orders DataFrame
     print("\nOrders schema:")
     orders_df.printSchema()
 
-    print("\nAbout to display orders...")
+    print("\nSample of cleaned orders:")
     orders_df.show(5)
 
-    print("\nOrders displayed successfully!")
-
-from src.logging_utils import setup_logger
 
 if __name__ == "__main__":
     main()
