@@ -80,3 +80,57 @@ def flag_negative_amounts(df):
             F.lit(False)
         )
     )
+
+# Net Amount calcuulation after applying discount percentage
+def calculate_net_amount(df):
+    """
+    Calculate net order amount after applying the discount percentage.
+    """
+
+    return df.withColumn(
+        "net_amount",
+        F.col("total_amount") * (
+            1 - F.col("discount_pct") / 100
+        )
+    )
+
+#Join to Find orphaned order items whose order_id does not exist in the orders DataFrame
+
+def find_orphaned_order_items(order_items_df, orders_df):
+    """
+    Identify order items whose order_id does not exist
+    in the orders DataFrame.
+
+    Returns only the orphaned order items.
+    """
+
+    orphaned_items = order_items_df.join(
+        orders_df.select("order_id"),
+        on="order_id",
+        how="left_anti"
+    )
+
+    return orphaned_items
+
+
+def join_orders_customers(orders_df, customers_df):
+    return orders_df.join(
+        customers_df,
+        on="customer_id",
+        how="inner"
+    )
+
+
+def join_orders_order_items(orders_df, order_items_df):
+    return orders_df.join(
+        order_items_df,
+        on="order_id",
+        how="inner"
+    )
+
+def find_orphaned_order_items(order_items_df, orders_df):
+    return order_items_df.join(
+        orders_df.select("order_id"),
+        on="order_id",
+        how="left_anti"
+    )
