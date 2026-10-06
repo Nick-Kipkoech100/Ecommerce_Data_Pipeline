@@ -206,3 +206,133 @@ def calculate_category_revenue_share(orders_df, order_items_df):
         "revenue_share",
         F.col("category_revenue") / F.col("monthly_total_revenue")
     )
+
+
+def flag_refund_exceeds_order(returns_df, orders_df):
+    return (
+        returns_df
+        .join(
+            orders_df.select("order_id", "net_amount"),
+            on="order_id",
+            how="inner"
+        )
+        .withColumn(
+            "refund_exceeds_order",
+            F.col("refund_amount") > F.col("net_amount")
+        )
+    )
+
+
+def calculate_return_rate_by_category(orders_df, order_items_df, returns_df):
+    category_orders = (
+        order_items_df
+        .select("order_id", "category")
+        .dropDuplicates(["order_id", "category"])
+    )
+
+    returned_orders = (
+        returns_df
+        .select("order_id")
+        .dropDuplicates(["order_id"])
+        .withColumn("was_returned", F.lit(True))
+    )
+
+    category_return_data = (
+        category_orders
+        .join(
+            returned_orders,
+            on="order_id",
+            how="left"
+        )
+        .withColumn(
+            "was_returned",
+            F.coalesce(F.col("was_returned"), F.lit(False))
+        )
+    )
+
+    return (
+        category_return_data
+        .groupBy("category")
+        .agg(
+            F.countDistinct("order_id").alias("total_orders"),
+            F.countDistinct(
+                F.when(
+                    F.col("was_returned") == True,
+                    F.col("order_id")
+                )
+            ).alias("returned_orders")
+        )
+        .withColumn(
+            "return_rate",
+            F.col("returned_orders") / F.col("total_orders")
+        )
+    )
+
+
+def calculate_return_rate_by_customer_tier(orders_df, customers_df, returns_df):
+    tier_orders = (
+        orders_df
+        .join(
+            customers_df.select("customer_id", "customer_tier"),
+            on="customer_id",
+            how="inner"
+        )
+        .select("order_id", "customer_tier")
+        .dropDuplicates(["order_id", "customer_tier"])
+    )
+
+    returned_orders = (
+        returns_df
+        .select("order_id")
+        .dropDuplicates(["order_id"])
+        .withColumn("was_returned", F.lit(True))
+    )
+
+    tier_return_data = (
+        tier_orders
+        .join(
+            returned_orders,
+            on="order_id",
+            how="left"
+        )
+        .withColumn(
+            "was_returned",
+            F.coalesce(F.col("was_returned"), F.lit(False))
+        )
+    )
+
+    return (
+        tier_return_data
+        .groupBy("customer_tier")
+        .agg(
+            F.countDistinct("order_id").alias("total_orders"),
+            F.countDistinct(
+                F.when(
+                    F.col("was_returned") == True,
+                    F.col("order_id")
+                )
+            ).alias("returned_orders")
+        )
+        .withColumn(
+            "return_rate",
+            F.col("returned_orders") / F.col("total_orders")
+        )
+    )
+
+def calculate_top_refund_customers(returns_df, orders_df):
+    return (
+        returns_df
+        .join(
+            orders_df.select("order_id", "customer_id"),
+            on="order_id",
+            how="inner"
+        )
+        .groupBy("customer_id")
+        .agg(
+            F.sum("refund_amount").alias("total_refund_amount")
+        )
+        .orderBy(
+            F.col("total_refund_amount").desc()
+        )
+        .limit(10)
+    )

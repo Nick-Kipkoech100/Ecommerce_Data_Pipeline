@@ -13,7 +13,11 @@ from src.transformation import (
     find_orphaned_order_items,
     calculate_customer_lifetime_rank,
     calculate_rolling_order_count,
-    calculate_category_revenue_share
+    calculate_category_revenue_share,
+    flag_refund_exceeds_order,
+    calculate_return_rate_by_category,
+    calculate_return_rate_by_customer_tier,
+    calculate_top_refund_customers,
 )
 from src.schemas import (
     orders_schema,
@@ -147,6 +151,34 @@ def main():
         order_items_df
     )
 
+
+    # Task 5.1: Flag returns where refund exceeds the order net amount
+    refund_analysis = flag_refund_exceeds_order(
+    returns_df,
+    orders_df
+    )
+
+    # Task 5.2: Calculate return rate by category
+    return_rate_by_category = calculate_return_rate_by_category(
+        orders_df,
+        order_items_df,
+        returns_df
+    )
+
+    # Task 5.3: Calculate return rate by customer tier
+    return_rate_by_customer_tier = calculate_return_rate_by_customer_tier(
+        orders_df,
+        customers_df,
+        returns_df
+    )
+
+    # Task 5.4: Calculate top 10 customers by total refund amount
+    top_refund_customers = calculate_top_refund_customers(
+        returns_df,
+        orders_df
+    )
+
+
     # Write Task 4 outputs
     customer_lifetime_rank.write \
         .mode("overwrite") \
@@ -163,6 +195,27 @@ def main():
         .option("header", True) \
         .csv("output/category_revenue_share")
 
+    #Write Task 5 outputs
+    refund_analysis.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/refund_analysis")
+
+    return_rate_by_category.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/return_rate_by_category")
+
+    return_rate_by_customer_tier.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/return_rate_by_customer_tier")
+
+    top_refund_customers.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/top_refund_customers")
+    
 
     #Log data-quality metrics
     logger.info(
