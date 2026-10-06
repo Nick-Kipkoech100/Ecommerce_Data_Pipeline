@@ -10,7 +10,10 @@ from src.transformation import (
     calculate_net_amount,
     join_orders_customers,
     join_orders_order_items,
-    find_orphaned_order_items
+    find_orphaned_order_items,
+    calculate_customer_lifetime_rank,
+    calculate_rolling_order_count,
+    calculate_category_revenue_share
 )
 from src.schemas import (
     orders_schema,
@@ -110,17 +113,6 @@ def main():
     )
 
 
-    print("\nOrders joined with customers:")
-    orders_with_customers.printSchema()
-    orders_with_customers.show(5, truncate=False)
-
-    print("\nOrders joined with order items:")
-    enriched_orders.printSchema()
-    enriched_orders.show(10, truncate=False)
-
-    print(f"\nOrders after customer join: {orders_with_customers.count()}")
-    print(f"Rows after order-item join: {enriched_orders.count()}")
-
     #Validate orders without matching customers (orphaned orders)
     orphaned_orders = orders_df.join(
     customers_df.select("customer_id"),
@@ -132,10 +124,45 @@ def main():
 
     if orphaned_order_count > 0:
         logger.warning(
-            f"Orphaned orders detected: {orphaned_orders_count}"
+            f"Orphaned orders detected: {orphaned_order_count}"
         )
     else:
-        logger.info("No orphaned otders detected.")
+        logger.info("No orphaned orders detected.")
+
+    # Task 4.6: Rank customers by lifetime net spend within each country
+    customer_lifetime_rank = calculate_customer_lifetime_rank(
+        orders_df,
+        customers_df
+    )
+
+    # Task 4.7: Calculate 7-day rolling order count per customer
+    rolling_order_count = calculate_rolling_order_count(
+        orders_df
+    )
+
+
+    # Task 4.8: Calculate each product category's share of monthly revenue
+    category_revenue_share = calculate_category_revenue_share(
+        orders_df,
+        order_items_df
+    )
+
+    # Write Task 4 outputs
+    customer_lifetime_rank.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/customer_lifetime_rank")
+
+    rolling_order_count.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/rolling_order_count")
+
+    category_revenue_share.write \
+        .mode("overwrite") \
+        .option("header", True) \
+        .csv("output/category_revenue_share")
+
 
     #Log data-quality metrics
     logger.info(
@@ -151,7 +178,7 @@ def main():
     logger.info(f"Customers: {customers_duplicates_removed}")
     logger.info(f"Order items: {order_items_duplicates_removed}")
 
-    print(f"Orphaned orders: {orphaned_orders.count()}")
+    logger.info(f"Orphaned orders: {orphaned_order_count}")
 
 
     #Rejection Counts for the respective Dataframes
@@ -183,27 +210,8 @@ def main():
         logger.warning("Rejected order item records detected.")
         order_items_rejected.show(truncate=False)
 
-    logger.info("Data ingestion and cleaning completed successfully.")
+    logger.info("Data pipeline completed successfully.")
 
-    print("Data ingestion and cleaning completed successfully.")
-
-    # Inspect the orders DataFrame
-    print("\nOrders schema:")
-    orders_df.printSchema()
-
-    print("\nSample of cleaned orders:")
-    orders_df.show(5)
-
-    #Temporary inspection of other DataFrames
-
-    print("\nSample of cleaned customers:")
-    customers_df.show(5)
-
-    print("\nSample of cleaned order items:")
-    order_items_df.show(5)
-
-    print("\nSample of cleaned returns:")
-    returns_df.show(5)
 
 if __name__ == "__main__":
     main()
