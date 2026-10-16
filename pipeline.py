@@ -116,6 +116,12 @@ def main():
     order_items_df
     )
 
+    # Add partition columns for final Parquet output
+    enriched_orders = (
+        enriched_orders
+        .withColumn("year", F.year("order_date"))
+        .withColumn("month", F.month("order_date"))
+    )
 
     #Validate orders without matching customers (orphaned orders)
     orphaned_orders = orders_df.join(
@@ -215,6 +221,12 @@ def main():
         .mode("overwrite") \
         .option("header", True) \
         .csv("output/top_refund_customers")
+
+    #Write final enriched dataset as partitioned parquet
+    enriched_orders.write \
+        .mode("overwrite") \
+        .partitionBy("year", "month") \
+        .parquet("output/enriched_orders")
     
 
     #Log data-quality metrics
