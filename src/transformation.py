@@ -116,7 +116,7 @@ def find_orphaned_order_items(order_items_df, orders_df):
 
 def join_orders_customers(orders_df, customers_df):
     return orders_df.join(
-        customers_df,
+        F.broadcast(customers_df),
         on="customer_id",
         how="inner"
     )
