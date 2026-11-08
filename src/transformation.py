@@ -336,3 +336,91 @@ def calculate_top_refund_customers(returns_df, orders_df):
         )
         .limit(10)
     )
+
+
+def validate_data_quality(orders_df, customers_df, order_items_df, returns_df):
+    # Check for null critical keys
+    if orders_df.filter(
+        F.col("order_id").isNull() |
+        F.col("customer_id").isNull()
+    ).count() > 0:
+        raise ValueError("Data quality check failed: null keys found in orders")
+
+    # Check primary key uniqueness
+    datasets = {
+        "orders": (orders_df, "order_id"),
+        "customers": (customers_df, "customer_id"),
+        "order_items": (order_items_df, "item_id"),
+        "returns": (returns_df, "return_id"),
+    }
+
+    for name, (df, key) in datasets.items():
+        total_rows = df.count()
+        unique_keys = df.select(key).distinct().count()
+
+        if total_rows != unique_keys:
+            raise ValueError(
+                f"Data quality check failed: duplicate {key} values found in {name}"
+            )
+
+    # Check for orders referencing nonexistent customers
+    orphaned_orders = orders_df.join(
+        customers_df.select("customer_id"),
+        on="customer_id",
+        how="left_anti"
+    )
+
+    orphaned_order_count = orphaned_orders.count()
+
+    if orphaned_order_count > 0:
+        raise ValueError(
+            f"Data quality check failed: {orphaned_order_count} orphaned orders found"
+        )
+
+    return True
+
+
+def validate_data_quality(orders_df, customers_df, order_items_df, returns_df):
+    # Check for null critical keys in orders
+    null_order_keys = orders_df.filter(
+        F.col("order_id").isNull() |
+        F.col("customer_id").isNull()
+    ).count()
+
+    if null_order_keys > 0:
+        raise ValueError(
+            f"Data quality check failed: {null_order_keys} orders contain null critical keys"
+        )
+
+    # Check primary key uniqueness
+    datasets = {
+        "orders": (orders_df, "order_id"),
+        "customers": (customers_df, "customer_id"),
+        "order_items": (order_items_df, "item_id"),
+        "returns": (returns_df, "return_id"),
+    }
+
+    for name, (df, key) in datasets.items():
+        total_rows = df.count()
+        unique_keys = df.select(key).distinct().count()
+
+        if total_rows != unique_keys:
+            raise ValueError(
+                f"Data quality check failed: duplicate {key} values found in {name}"
+            )
+
+    # Check for orders referencing nonexistent customers
+    orphaned_orders = orders_df.join(
+        customers_df.select("customer_id"),
+        on="customer_id",
+        how="left_anti"
+    )
+
+    orphaned_order_count = orphaned_orders.count()
+
+    if orphaned_order_count > 0:
+        raise ValueError(
+            f"Data quality check failed: {orphaned_order_count} orphaned orders found"
+        )
+
+    return True

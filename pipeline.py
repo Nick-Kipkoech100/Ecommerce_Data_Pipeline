@@ -18,6 +18,7 @@ from src.transformation import (
     calculate_return_rate_by_category,
     calculate_return_rate_by_customer_tier,
     calculate_top_refund_customers,
+    validate_data_quality,
 )
 from src.schemas import (
     orders_schema,
@@ -104,6 +105,15 @@ def main():
     .option("header", True) \
     .csv("output/orphaned_order_items")
 
+
+    # B3 - Data quality gate
+    validate_data_quality(
+        orders_df,
+        customers_df,
+        order_items_df,
+        returns_df
+    )
+
     #Join Orders with customers
     orders_with_customers = join_orders_customers(
     orders_df,
@@ -123,21 +133,13 @@ def main():
         .withColumn("month", F.month("order_date"))
     )
 
-    #Validate orders without matching customers (orphaned orders)
-    orphaned_orders = orders_df.join(
-    customers_df.select("customer_id"),
-    on="customer_id",
-    how="left_anti"
-    )
-
-    orphaned_order_count = orphaned_orders.count()
-
-    if orphaned_order_count > 0:
-        logger.warning(
-            f"Orphaned orders detected: {orphaned_order_count}"
-        )
-    else:
-        logger.info("No orphaned orders detected.")
+   # B3 - Data quality gate
+    validate_data_quality(
+        orders_df,
+        customers_df,
+        order_items_df,
+        returns_df
+)
 
     # Task 4.6: Rank customers by lifetime net spend within each country
     customer_lifetime_rank = calculate_customer_lifetime_rank(
@@ -243,7 +245,6 @@ def main():
     logger.info(f"Customers: {customers_duplicates_removed}")
     logger.info(f"Order items: {order_items_duplicates_removed}")
 
-    logger.info(f"Orphaned orders: {orphaned_order_count}")
 
 
     #Rejection Counts for the respective Dataframes
